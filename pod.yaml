@@ -1,0 +1,22 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: trajectories-sync
+  labels:
+    tier: api
+spec:
+  containers:
+  - name: schema
+    imagePullPolicy: Always
+    image: argovis/trajectories-sync:dev
+    command: ['python', '-u', 'loadtraj.py']
+    #command: ['sleep', '10000000']
+    resources:
+      requests:
+        memory: "0Gi"
+        cpu: "0m"
+      limits:
+        memory: 2500Mi
+        cpu: 750m
+  restartPolicy: Never
+
