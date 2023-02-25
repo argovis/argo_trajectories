@@ -1,5 +1,5 @@
 from pymongo import MongoClient
-import datetime, xarray, numpy, pprint
+import datetime, xarray, numpy, pprint, math
 
 client = MongoClient('mongodb://database/argo')
 db = client.argo
@@ -12,7 +12,7 @@ def determine_metaid(metadict, existingmeta, prefix):
     # return the _id property from the element of <existingmeta> that exactly matches <metadict> modulo _id,
     # or a new _id for metadict if it is not yet found in the database.
 
-    ignore_keys = ['_id']
+    ignore_keys = ['_id', 'date_updated_argovis']
     metaid = None
     for meta in existingmeta:
         if {k: v for k,v in meta.items() if k not in ignore_keys} == {k: v for k,v in metadict.items() if k not in ignore_keys}:
@@ -40,6 +40,18 @@ def mungetime(nssinceepoch):
 
     return datetime.datetime.fromtimestamp(int(nssinceepoch/1000000000))
 
+def cleanup(meas):
+    # given a measurement, return the measurement after some generic cleanup
+
+    if meas is None:
+        return meas
+
+    # use None as missing fill
+    if math.isnan(meas):
+        return None        
+
+    return round(meas,6) # at most 6 significant decimal places
+
 xar = xarray.open_dataset('Scripps_Argo_velocities_allPres_200101_202012_02132023.tap')
 
 ## munge positioning_system
@@ -54,31 +66,44 @@ pt = [''.join(k).strip() for k in pt]
 
 data_keys = ['VELOCITY_ZONAL', 'VELOCITY_MERIDIONAL', 'VELOCITY_ZONAL_TRANSMITTED', 'VELOCITY_MERIDIONAL_TRANSMITTED', 'SPEED', 'SPEED_TRANSMITTED', 'DRIFT_PRES', 'DRIFT_TEMP', 'NUMBER_SURFACE_FIXES']
 
-for i in [0]: #range(xar.dimensions['length'].size):
+# see what data IDs have already been uploaded, and skip them in case of interruption
+completed = [ x['_id'] for x in list(db.trajectories.find({}, {'_id':1}))]
+
+for i in range(len(xar['WMO_NUMBER'])):
+    ID = str(int(xar['WMO_NUMBER'][i].item())) + '_' + stringcycle(xar['CYCLE_NUMBER'][i].item())
+    if ID in completed:
+        print('skipping', ID)
+        continue
     data = {
-        '_id': str(xar['WMO_NUMBER'][i].item()) + '_' + stringcycle(xar['CYCLE_NUMBER'][i].item()),
-        'cycle_number': xar['CYCLE_NUMBER'][i].item(),
-        'geolocation': {"type": "Point", "coordinates": [xar['LONGITUDE_MIDPOINT'][i].item(), xar['LATITUDE_MIDPOINT'][i].item()]},
+        '_id': ID,
+        'cycle_number': int(xar['CYCLE_NUMBER'][i].item()),
+        'geolocation': {"type": "Point", "coordinates": [cleanup(xar['LONGITUDE_MIDPOINT'][i].item()), cleanup(xar['LATITUDE_MIDPOINT'][i].item())]},
         'timestamp': mungetime(xar['JULD_MIDPOINT'][i].item()),
-        'geolocation_descending': {"type": "Point", "coordinates": [xar['LONGITUDE_DESCENDING'][i].item(), xar['LATITUDE_DESCENDING'][i].item()]},
+        'geolocation_descending': {"type": "Point", "coordinates": [cleanup(xar['LONGITUDE_DESCENDING'][i].item()), cleanup(xar['LATITUDE_DESCENDING'][i].item())]},
         'timestamp_descending': mungetime(xar['JULD_DESCENDING'][i].item()),
-        'geolocation_ascending': {"type": "Point", "coordinates": [xar['LONGITUDE_ASCENDING'][i].item(), xar['LATITUDE_ASCENDING'][i].item()]},
+        'geolocation_ascending': {"type": "Point", "coordinates": [cleanup(xar['LONGITUDE_ASCENDING'][i].item()), cleanup(xar['LATITUDE_ASCENDING'][i].item())]},
         'timestamp_ascending': mungetime(xar['JULD_ASCENDING'][i].item()),
-        'geolocation_descending_transmitted': {"type": "Point", "coordinates": [xar['LONGITUDE_DESCENDING_TRANSMITTED'][i].item(), xar['LATITUDE_DESCENDING_TRANSMITTED'][i].item()]},
+        'geolocation_descending_transmitted': {"type": "Point", "coordinates": [cleanup(xar['LONGITUDE_DESCENDING_TRANSMITTED'][i].item()), cleanup(xar['LATITUDE_DESCENDING_TRANSMITTED'][i].item())]},
         'timestamp_descending_transmitted': mungetime(xar['JULD_DESCENDING_TRANSMITTED'][i].item()),
-        'geolocation_ascending_transmitted': {"type": "Point", "coordinates": [xar['LONGITUDE_ASCENDING_TRANSMITTED'][i].item(), xar['LATITUDE_ASCENDING_TRANSMITTED'][i].item()]},
+        'geolocation_ascending_transmitted': {"type": "Point", "coordinates": [cleanup(xar['LONGITUDE_ASCENDING_TRANSMITTED'][i].item()), cleanup(xar['LATITUDE_ASCENDING_TRANSMITTED'][i].item())]},
         'timestamp_ascending_transmitted': mungetime(xar['JULD_ASCENDING_TRANSMITTED'][i].item()),
-        'geolocation_midpoint_transmitted': {"type": "Point", "coordinates": [xar['LONGITUDE_MIDPOINT_TRANSMITTED'][i].item(), xar['LATITUDE_MIDPOINT_TRANSMITTED'][i].item()]},
+        'geolocation_midpoint_transmitted': {"type": "Point", "coordinates": [cleanup(xar['LONGITUDE_MIDPOINT_TRANSMITTED'][i].item()), cleanup(xar['LATITUDE_MIDPOINT_TRANSMITTED'][i].item())]},
         'timestamp_midpoint_transmitted': mungetime(xar['JULD_MIDPOINT_TRANSMITTED'][i].item()),
         'data':[]       
     }
 
     metadata = {
-        'wmo_number': float(xar['WMO_NUMBER'][i].item()),
-        'positioning_system_flag': xar['POSITIONING_SYSTEM_FLAG'][i].item(),
-        'sensor_type_flag': xar['SENSOR_TYPE_FLAG'][i].item(),
-        'mission_flag': xar['MISSION_FLAG'][i].item(),
-        'extrapolation_flag': xar['EXTRAPOLATION_FLAG'][i].item(),
+        'platform': str(int(xar['WMO_NUMBER'][i].item())),
+        'data_type': 'argo_trajectory',
+        'source': [{
+            'source': ['scripps_argo_trajectory'],
+            'doi': 'https://doi.org/10.6075/J0FQ9WS6'
+        }],
+        'date_updated_argovis': datetime.datetime.now(),
+        'positioning_system_flag': int(xar['POSITIONING_SYSTEM_FLAG'][i].item()),
+        'sensor_type_flag': int(xar['SENSOR_TYPE_FLAG'][i].item()),
+        'mission_flag': int(xar['MISSION_FLAG'][i].item()),
+        'extrapolation_flag': int(xar['EXTRAPOLATION_FLAG'][i].item()),
         'positioning_system': ps[i],
         'platform_type': pt[i],
         'data_info': [
@@ -89,16 +114,16 @@ for i in [0]: #range(xar.dimensions['length'].size):
     }
 
     for key in data_keys:
-        data['data'].append([xar[key][i].item()])
+        data['data'].append([cleanup(xar[key][i].item())])
         metadata['data_info'][0].append(key.lower())
         metadata['data_info'][2].append([xar[key].attrs['long_name'], xar[key].attrs['units']])
 
     # determine if an appropriate pre-existing metadata record exists, and upsert metadata if required
-    meta = []#list(db.trajectoryMeta.find({"wmo_number": metadata['wmo_number'] }))
-    metadata['_id'] = determine_metaid(metadata, meta, str(metadata['wmo_number'])+'_m' )
+    meta = list(db.trajectoriesMeta.find({"platform": metadata['platform'] }))
+    metadata['_id'] = determine_metaid(metadata, meta, str(metadata['platform'])+'_m' )
     try:
-        pprint.pprint(metadata, indent=4)
-        # db.trajectoryMeta.replace_one({'_id': metadata['_id']}, metadata, True)
+        #pprint.pprint(metadata, indent=4)
+        db.trajectoriesMeta.replace_one({'_id': metadata['_id']}, metadata, True)
     except BaseException as err:
         print('error: metadata upsert failure on', metadata)
         print(err)
@@ -106,8 +131,8 @@ for i in [0]: #range(xar.dimensions['length'].size):
     # write data record to mongo
     data['metadata'] = [metadata['_id']]
     try:
-        pprint.pprint(data, indent=4)
-        #db.trajectory.replace_one({'_id': data['_id']}, data, True)
+        #pprint.pprint(data, indent=4)
+        db.trajectories.replace_one({'_id': data['_id']}, data, True)
     except BaseException as err:
         print('error: data upsert failure on', data)
         print(err)
