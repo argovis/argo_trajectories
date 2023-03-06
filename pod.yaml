@@ -10,7 +10,7 @@ spec:
     imagePullPolicy: Always
     image: argovis/trajectories-sync:dev
     command: ['python', '-u', 'loadtraj.py']
-    #command: ['sleep', '10000000']
+    #command: ['python', '-u', 'doublecheck.py']
     resources:
       requests:
         memory: "0Gi"
