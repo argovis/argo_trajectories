@@ -73,7 +73,7 @@ def mongohist(key):
             }
         }
     ]
-    return {x['_id'][0]: x['count'] for x in list(db.trajectories.aggregate(pipeline))}
+    return {float(x['_id'][0]): x['count'] for x in list(db.trajectories.aggregate(pipeline))}
 
 # geolocation matches
 geopairs = [
@@ -123,10 +123,10 @@ metapairs = [
 for pair in metapairs:
     mongometa = mongohist(pair[0])
     ncmeta = xarhist(pair[1])
-    print(mongometa)
-    print(ncmeta)
     if not mongometa == ncmeta:
         print('mismatch on', pair[1])
+        print(mongometa)
+        print(ncmeta)
     else:
         print('clean match on', pair[1])
 
