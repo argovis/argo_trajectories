@@ -156,8 +156,6 @@ for i, k in enumerate(datakeys):
             if xsum != msum:
                 print(ID, cleanup(xar[k][i].item()), dps[ID], xsum, msum)
                 clean = False
-        else:
-           print(j, len(xar[k]), xar[k][j].item(), dps[ID], xsum, msum)
     if clean:
         print('clean match on', k)
 
