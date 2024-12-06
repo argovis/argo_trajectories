@@ -100,7 +100,7 @@ for i in range(len(xar['WMO_NUMBER'])):
         'data_type': 'argo_trajectory',
         'source': [{
             'source': ['scripps_argo_trajectory'],
-            'doi': 'https://doi.org/10.6075/J0FQ9WS6'
+            'doi': 'https://doi.org/10.6075/J0NK3F7V'
         }],
         'date_updated_argovis': datetime.datetime.now(),
         'positioning_system_flag': int(xar['POSITIONING_SYSTEM_FLAG'][i].item()),
