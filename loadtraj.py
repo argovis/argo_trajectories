@@ -1,5 +1,6 @@
 from pymongo import MongoClient
-import datetime, xarray, numpy, pprint, math
+import datetime, xarray, numpy, pprint, math, shutil
+from netCDF4 import Dataset
 
 client = MongoClient('mongodb://database/argo')
 db = client.argo
@@ -52,17 +53,19 @@ def cleanup(meas):
 
     return round(meas,6) # at most 6 significant decimal places
 
-xar = xarray.open_dataset('Scripps_Argo_velocities_allPres_200101_202012_02132023.tap')
 
-## munge positioning_system
-ps = [bytes(xar['POSITIONING_SYSTEM'][i].data).decode("utf-8") for i in range(len(xar['POSITIONING_SYSTEM']))]
-ps = list(zip(*ps))
-ps = [''.join(k).strip() for k in ps]
+# PLATFORM_TYPE is both a data variable and a coordinate in the upstream data, this is a no no
+shutil.copyfile('trajectories_J0NK3F7V.nc', 'modified_file.nc')
+ds = Dataset('modified_file.nc',mode='a')
+ds.renameVariable('PLATFORM_TYPE', 'PLATFORM_TYPE_VAR')
+ds.close()
 
-## munge platform_type
-pt = [bytes(xar['PLATFORM_TYPE'][i].data).decode("utf-8") for i in range(len(xar['PLATFORM_TYPE']))]
-pt = list(zip(*pt))
-pt = [''.join(k).strip() for k in pt]
+xar = xarray.open_dataset('modified_file.nc')
+
+# ## munge positioning_system # no longer present in https://doi.org/10.6075/J0NK3F7V ?
+# ps = [bytes(xar['POSITIONING_SYSTEM'][i].data).decode("utf-8") for i in range(len(xar['POSITIONING_SYSTEM']))]
+# ps = list(zip(*ps))
+# ps = [''.join(k).strip() for k in ps]
 
 data_keys = ['VELOCITY_ZONAL', 'VELOCITY_MERIDIONAL', 'VELOCITY_ZONAL_TRANSMITTED', 'VELOCITY_MERIDIONAL_TRANSMITTED', 'SPEED', 'SPEED_TRANSMITTED', 'DRIFT_PRES', 'DRIFT_TEMP', 'NUMBER_SURFACE_FIXES']
 
@@ -97,15 +100,15 @@ for i in range(len(xar['WMO_NUMBER'])):
         'data_type': 'argo_trajectory',
         'source': [{
             'source': ['scripps_argo_trajectory'],
-            'doi': 'https://doi.org/10.6075/J0FQ9WS6'
+            'doi': 'https://doi.org/10.6075/J0NK3F7V'
         }],
         'date_updated_argovis': datetime.datetime.now(),
         'positioning_system_flag': int(xar['POSITIONING_SYSTEM_FLAG'][i].item()),
         'sensor_type_flag': int(xar['SENSOR_TYPE_FLAG'][i].item()),
         'mission_flag': int(xar['MISSION_FLAG'][i].item()),
         'extrapolation_flag': int(xar['EXTRAPOLATION_FLAG'][i].item()),
-        'positioning_system': ps[i],
-        'platform_type': pt[i],
+        #'positioning_system': ps[i],
+        'platform_type': b''.join(xar['PLATFORM_TYPE_VAR'].isel(NUM_POINTS=i).values).decode('utf-8').strip(),
         'data_info': [
             [],
             ['long name', 'units'],
@@ -116,13 +119,15 @@ for i in range(len(xar['WMO_NUMBER'])):
     for key in data_keys:
         data['data'].append([cleanup(xar[key][i].item())])
         metadata['data_info'][0].append(key.lower())
-        metadata['data_info'][2].append([xar[key].attrs['long_name'], xar[key].attrs['units']])
+        try:
+            metadata['data_info'][2].append([xar[key].attrs['long_name'], xar[key].attrs['units']])
+        except:
+            metadata['data_info'][2].append([xar[key].attrs['long_name'], ''])
 
     # determine if an appropriate pre-existing metadata record exists, and upsert metadata if required
     meta = list(db.trajectoriesMeta.find({"platform": metadata['platform'] }))
     metadata['_id'] = determine_metaid(metadata, meta, str(metadata['platform'])+'_m' )
     try:
-        #pprint.pprint(metadata, indent=4)
         db.trajectoriesMeta.replace_one({'_id': metadata['_id']}, metadata, True)
     except BaseException as err:
         print('error: metadata upsert failure on', metadata)
