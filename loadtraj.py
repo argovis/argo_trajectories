@@ -70,7 +70,7 @@ xar = xarray.open_dataset('modified_file.nc')
 data_keys = ['VELOCITY_ZONAL', 'VELOCITY_MERIDIONAL', 'VELOCITY_ZONAL_TRANSMITTED', 'VELOCITY_MERIDIONAL_TRANSMITTED', 'SPEED', 'SPEED_TRANSMITTED', 'DRIFT_PRES', 'DRIFT_TEMP', 'NUMBER_SURFACE_FIXES']
 
 # see what data IDs have already been uploaded, and skip them in case of interruption
-completed = [ x['_id'] for x in list(db.trajectoriesx.find({}, {'_id':1}))]
+completed = [ x['_id'] for x in list(db.trajectories.find({}, {'_id':1}))]
 
 for i in range(len(xar['WMO_NUMBER'])):
     ID = str(int(xar['WMO_NUMBER'][i].item())) + '_' + stringcycle(xar['CYCLE_NUMBER'][i].item())
@@ -125,10 +125,10 @@ for i in range(len(xar['WMO_NUMBER'])):
             metadata['data_info'][2].append([xar[key].attrs['long_name'], ''])
 
     # determine if an appropriate pre-existing metadata record exists, and upsert metadata if required
-    meta = list(db.trajectoriesMetax.find({"platform": metadata['platform'] }))
+    meta = list(db.trajectoriesMeta.find({"platform": metadata['platform'] }))
     metadata['_id'] = determine_metaid(metadata, meta, str(metadata['platform'])+'_m' )
     try:
-        db.trajectoriesMetax.replace_one({'_id': metadata['_id']}, metadata, True)
+        db.trajectoriesMeta.replace_one({'_id': metadata['_id']}, metadata, True)
     except BaseException as err:
         print('error: metadata upsert failure on', metadata)
         print(err)
@@ -137,7 +137,7 @@ for i in range(len(xar['WMO_NUMBER'])):
     data['metadata'] = [metadata['_id']]
     try:
         #pprint.pprint(data, indent=4)
-        db.trajectoriesx.replace_one({'_id': data['_id']}, data, True)
+        db.trajectories.replace_one({'_id': data['_id']}, data, True)
     except BaseException as err:
         print('error: data upsert failure on', data)
         print(err)
