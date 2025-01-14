@@ -40,14 +40,14 @@ def xarlist_num(ncvar):
 
 def mongolist_geo(keystring, index):
     pipeline = [{'$project' : {"x" : { '$arrayElemAt': [ keystring, index ] }}}, {'$group' : {'_id' : "$x"}}]
-    x = [a['_id'] for a in list(db.trajectories.aggregate(pipeline))]
+    x = [a['_id'] for a in list(db.argotrajectories.aggregate(pipeline))]
     return numpy.sort(numpy.unique(x))
 
 def xarlist_date(ncvar):
     return numpy.sort([mungetime(x.item()) for x in xar[ncvar]])
 
 def mongolist_date(keystring):
-    x = [a[keystring] for a in list(db.trajectories.find({}, {keystring:1}))]
+    x = [a[keystring] for a in list(db.argotrajectories.find({}, {keystring:1}))]
     return numpy.sort(x)
 
 def xarhist(varname):
@@ -73,7 +73,7 @@ def mongohist(key):
             }
         }
     ]
-    return {float(x['_id'][0]): x['count'] for x in list(db.trajectories.aggregate(pipeline))}
+    return {float(x['_id'][0]): x['count'] for x in list(db.argotrajectories.aggregate(pipeline))}
 
 # geolocation matches
 geopairs = [
@@ -144,7 +144,7 @@ datakeys = [
 ]
 
 for i, k in enumerate(datakeys):
-    dps = { x['_id']: x['d'] for x in list(db.trajectories.aggregate([{'$project':{'_id':1, 'd':{'$arrayElemAt':[{'$arrayElemAt':['$data',i]},0]}}}]))}
+    dps = { x['_id']: x['d'] for x in list(db.argotrajectories.aggregate([{'$project':{'_id':1, 'd':{'$arrayElemAt':[{'$arrayElemAt':['$data',i]},0]}}}]))}
     xsum = 0
     msum = 0
     clean = True 
@@ -159,5 +159,5 @@ for i, k in enumerate(datakeys):
     if clean:
         print('clean match on', k)
 
-# do db.trajectoriesMeta.distinct('data_info') to see there's only one value across all metadata for data_info, looks correct.
+# do db.argotrajectoriesMeta.distinct('data_info') to see there's only one value across all metadata for data_info, looks correct.
 
