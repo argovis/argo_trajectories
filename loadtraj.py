@@ -173,7 +173,7 @@ def get_timestamp_range(db, collection_name):
         return None, None
 
 startDate, endDate = get_timestamp_range(db, 'argotrajectories')
-entry = {"metagroups": ["id"], "startDate": startDate, "endDate": endDate}
+entry = {"metagroups": ["id", "metadata", "platform"], "startDate": startDate, "endDate": endDate}
 
 rldoc = db.summaries.find_one({"_id": 'ratelimiter'})
 if rldoc:
